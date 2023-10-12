@@ -28,10 +28,12 @@
 
 namespace pmacc
 {
-    template<class T_FrameType>
+    template<typename T_FrameType, typename T_SuperCellSize>
     class SuperCell
     {
     public:
+        using SuperCellSize = T_SuperCellSize;
+
         HDINLINE SuperCell() : firstFramePtr(nullptr), lastFramePtr(nullptr)
         {
         }
@@ -46,12 +48,12 @@ namespace pmacc
             return lastFramePtr;
         }
 
-        HDINLINE T_FrameType const* FirstFramePtr() const
+        HDINLINE T_FrameType* FirstFramePtr() const
         {
             return firstFramePtr;
         }
 
-        HDINLINE T_FrameType const* LastFramePtr() const
+        HDINLINE T_FrameType* LastFramePtr() const
         {
             return lastFramePtr;
         }
@@ -66,7 +68,7 @@ namespace pmacc
             mustShiftVal = value;
         }
 
-        HDINLINE uint32_t getSizeLastFrame()
+        HDINLINE uint32_t getSizeLastFrame() const
 #if(ALPAKA_ACC_GPU_HIP_ENABLED == 1 && (HIP_VERSION_MAJOR * 100 + HIP_VERSION_MINOR) == 502)
             /* ROCm 5.2.0 producing particle loss in KernelShiftParticles if this method is defined as `const`.
              * see: https://github.com/ComputationalRadiationPhysics/picongpu/issues/4305
@@ -74,11 +76,11 @@ namespace pmacc
             volatile
 #endif
         {
-            constexpr uint32_t frameSize = math::CT::volume<typename T_FrameType::SuperCellSize>::type::value;
+            constexpr uint32_t frameSize = T_FrameType::frameSize;
             return numParticles ? ((numParticles - 1u) % frameSize + 1u) : 0u;
         }
 
-        HDINLINE uint32_t getNumParticles()
+        HDINLINE uint32_t getNumParticles() const
 #if(ALPAKA_ACC_GPU_HIP_ENABLED == 1 && (HIP_VERSION_MAJOR * 100 + HIP_VERSION_MINOR) == 502)
             /* ROCm 5.2.0 producing particle loss in KernelShiftParticles if this method is defined as `const`.
              * see: https://github.com/ComputationalRadiationPhysics/picongpu/issues/4305
