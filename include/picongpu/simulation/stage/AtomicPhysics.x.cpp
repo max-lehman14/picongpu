@@ -35,15 +35,15 @@
 #include "picongpu/particles/atomicPhysics/stage/ChooseTransition.hpp"
 #include "picongpu/particles/atomicPhysics/stage/ChooseTransitionGroup.hpp"
 #include "picongpu/particles/atomicPhysics/stage/DecelerateElectrons.hpp"
-#include "picongpu/particles/atomicPhysics/stage/FillLocalRateCache.hpp"
+#include "picongpu/particles/atomicPhysics/stage/FillRateCache.hpp"
 #include "picongpu/particles/atomicPhysics/stage/FixAtomicState.hpp"
 #include "picongpu/particles/atomicPhysics/stage/LoadAtomicInputData.hpp"
 #include "picongpu/particles/atomicPhysics/stage/RecordChanges.hpp"
 #include "picongpu/particles/atomicPhysics/stage/RecordSuggestedChanges.hpp"
 #include "picongpu/particles/atomicPhysics/stage/ResetAcceptedStatus.hpp"
 #include "picongpu/particles/atomicPhysics/stage/ResetDeltaWeightElectronHistogram.hpp"
-#include "picongpu/particles/atomicPhysics/stage/ResetLocalRateCache.hpp"
-#include "picongpu/particles/atomicPhysics/stage/ResetLocalTimeStepField.hpp"
+#include "picongpu/particles/atomicPhysics/stage/ResetRateCache.hpp"
+#include "picongpu/particles/atomicPhysics/stage/ResetTimeStepField.hpp"
 #include "picongpu/particles/atomicPhysics/stage/RollForOverSubscription.hpp"
 #include "picongpu/particles/atomicPhysics/stage/SpawnIonizationElectrons.hpp"
 #include "picongpu/particles/atomicPhysics/stage/UpdateTimeRemaining.hpp"
@@ -73,7 +73,7 @@ namespace picongpu::simulation::stage
         /** atomic physics stage
          *
          * models excited atomic state and ionization dynamics
-         *
+         *gi
          * @note one instance of this class is initialized and it's operator() called for every time step
          *
          * @tparam T_AtomicPhysicsIonSpecies list of all ion species to partake in the atomicPhysics step
@@ -99,12 +99,12 @@ namespace picongpu::simulation::stage
             using S_LinearizedBox = DataBoxDim1Access<typename T_Field::DataBoxType>;
 
             using S_OverSubscribedField
-                = picongpu::particles::atomicPhysics::localHelperFields::LocalElectronHistogramOverSubscribedField<
+                = picongpu::particles::atomicPhysics::localHelperFields::ElectronHistogramOverSubscribedField<
                     picongpu::MappingDesc>;
             using S_TimeRemainingField
-                = particles::atomicPhysics::localHelperFields ::LocalTimeRemainingField<picongpu::MappingDesc>;
+                = particles::atomicPhysics::localHelperFields::TimeRemainingField<picongpu::MappingDesc>;
             using S_FoundUnboundField
-                = particles::atomicPhysics::localHelperFields ::LocalFoundUnboundIonField<picongpu::MappingDesc>;
+                = particles::atomicPhysics::localHelperFields::FoundUnboundIonField<picongpu::MappingDesc>;
 
             // species Lists
             //{
@@ -119,11 +119,11 @@ namespace picongpu::simulation::stage
             using IPDIonSpecies = MakeSeq_t<AtomicPhysicsIonSpecies, OnlyIPDIonSpecies>;
             //}
 
-            //! set local timeRemaining to PIC-time step
+            //! set timeRemaining to PIC-time step
             HINLINE static void setTimeRemaining()
             {
                 pmacc::DataConnector& dc = pmacc::Environment<>::get().DataConnector();
-                auto& localTimeRemainingField = *dc.get<S_TimeRemainingField>("LocalTimeRemainingField");
+                auto& localTimeRemainingField = *dc.get<S_TimeRemainingField>("TimeRemainingField");
                 localTimeRemainingField.getDeviceBuffer().setValue(picongpu::sim.pic.getDt()); // sim.unit.time()
             }
 
@@ -131,19 +131,19 @@ namespace picongpu::simulation::stage
             HINLINE static void resetElectronEnergyHistogram()
             {
                 pmacc::DataConnector& dc = pmacc::Environment<>::get().DataConnector();
-                auto& localElectronHistogramField
+                auto& electronHistogramField
                     = *dc.get<particles::atomicPhysics::electronDistribution::LocalHistogramField<
                         picongpu::atomicPhysics::ElectronHistogram,
-                        picongpu::MappingDesc>>("Electron_localHistogramField");
-                localElectronHistogramField.getDeviceBuffer().setValue(picongpu::atomicPhysics::ElectronHistogram());
+                        picongpu::MappingDesc>>("Electron_HistogramField");
+                electronHistogramField.getDeviceBuffer().setValue(picongpu::atomicPhysics::ElectronHistogram());
             }
 
-            //! reset localFoundUnboundIonField on device side
+            //! reset foundUnboundIonField on device side
             HINLINE static void resetFoundUnboundIon()
             {
                 pmacc::DataConnector& dc = pmacc::Environment<>::get().DataConnector();
-                auto& localFoundUnboundIonField = *dc.get<S_FoundUnboundField>("LocalFoundUnboundIonField");
-                localFoundUnboundIonField.getDeviceBuffer().setValue(0._X);
+                auto& foundUnboundIonField = *dc.get<S_FoundUnboundField>("FoundUnboundIonField");
+                foundUnboundIonField.getDeviceBuffer().setValue(0._X);
             };
 
             //! print electron histogram to console, debug only
@@ -154,49 +154,48 @@ namespace picongpu::simulation::stage
                     picongpu::particles::atomicPhysics::electronDistribution::
                         LocalHistogramField<picongpu::atomicPhysics::ElectronHistogram, picongpu::MappingDesc>,
                     picongpu::particles::atomicPhysics::electronDistribution::PrintHistogramToConsole<
-                        T_printOnlyOverSubscribed>>{}(mappingDesc, "Electron_localHistogramField");
+                        T_printOnlyOverSubscribed>>{}(mappingDesc, "Electron_HistogramField");
             }
 
-            //! print LocalElectronHistogramOverSubscribedField to console, debug only
+            //! print ElectronHistogramOverSubscribedField to console, debug only
             HINLINE static void printOverSubscriptionFieldToConsole(picongpu::MappingDesc const mappingDesc)
             {
                 picongpu::particles::atomicPhysics::stage::DumpSuperCellDataToConsole<
-                    picongpu::particles::atomicPhysics::localHelperFields::LocalElectronHistogramOverSubscribedField<
+                    picongpu::particles::atomicPhysics::localHelperFields::ElectronHistogramOverSubscribedField<
                         picongpu::MappingDesc>,
                     picongpu::particles::atomicPhysics::localHelperFields::PrintOverSubcriptionFieldToConsole>{}(
                     mappingDesc,
-                    "LocalElectronHistogramOverSubscribedField");
+                    "ElectronHistogramOverSubscribedField");
             }
 
             //! print rejectionProbabilityCache to console, debug only
             HINLINE static void printRejectionProbabilityCacheToConsole(picongpu::MappingDesc const mappingDesc)
             {
                 picongpu::particles::atomicPhysics::stage::DumpSuperCellDataToConsole<
-                    picongpu::particles::atomicPhysics::localHelperFields ::LocalRejectionProbabilityCacheField<
+                    picongpu::particles::atomicPhysics::localHelperFields ::RejectionProbabilityCacheField<
                         picongpu::MappingDesc>,
                     picongpu::particles::atomicPhysics::localHelperFields ::PrintRejectionProbabilityCacheToConsole<
-                        true>>{}(mappingDesc, "LocalRejectionProbabilityCacheField");
+                        true>>{}(mappingDesc, "RejectionProbabilityCacheField");
             }
 
-            //! print local time remaining to console, debug only
-            HINLINE static void printTimeRemaingToConsole(picongpu::MappingDesc const mappingDesc)
+            //! print time remaining to console, debug only
+            HINLINE static void printTimeRemaingToConsole(picongpu::MappingDesc const& mappingDesc)
             {
                 picongpu::particles::atomicPhysics::stage::DumpSuperCellDataToConsole<
-                    picongpu::particles::atomicPhysics::localHelperFields::LocalTimeRemainingField<
-                        picongpu::MappingDesc>,
+                    picongpu::particles::atomicPhysics::localHelperFields::TimeRemainingField<picongpu::MappingDesc>,
                     picongpu::particles::atomicPhysics::localHelperFields::PrintTimeRemaingToConsole>{}(
                     mappingDesc,
-                    "LocalTimeRemainingField");
+                    "TimeRemainingField");
             }
 
             //! print local time step to console, debug only
             HINLINE static void printTimeStepToConsole(picongpu::MappingDesc const mappingDesc)
             {
                 picongpu::particles::atomicPhysics::stage::DumpSuperCellDataToConsole<
-                    picongpu::particles::atomicPhysics::localHelperFields::LocalTimeStepField<picongpu::MappingDesc>,
+                    picongpu::particles::atomicPhysics::localHelperFields::TimeStepField<picongpu::MappingDesc>,
                     picongpu::particles::atomicPhysics::localHelperFields::PrintTimeStepToConsole>{}(
                     mappingDesc,
-                    "LocalTimeStepField");
+                    "TimeStepField");
             }
 
             void resetAcceptStatus(picongpu::MappingDesc const& mappingDesc) const
@@ -245,18 +244,17 @@ namespace picongpu::simulation::stage
             //! reset each superCell's time step
             void resetTimeStep(picongpu::MappingDesc const& mappingDesc) const
             {
-                // timeStep = localTimeRemaining
-                picongpu::particles::atomicPhysics::stage::ResetLocalTimeStepField<T_numberAtomicPhysicsIonSpecies>()(
+                // timeStep = timeRemaining
+                picongpu::particles::atomicPhysics::stage::ResetTimeStepField<T_numberAtomicPhysicsIonSpecies>()(
                     mappingDesc);
             }
 
             //! reset each superCell's rate cache
             void resetRateCache() const
             {
-                using ForEachIonSpeciesResetLocalRateCache = pmacc::meta::ForEach<
-                    AtomicPhysicsIonSpecies,
-                    particles::atomicPhysics::stage::ResetLocalRateCache<boost::mpl::_1>>;
-                ForEachIonSpeciesResetLocalRateCache{}();
+                using ForEachIonSpeciesResetRateCache = pmacc::meta::
+                    ForEach<AtomicPhysicsIonSpecies, particles::atomicPhysics::stage::ResetRateCache<boost::mpl::_1>>;
+                ForEachIonSpeciesResetRateCache{}();
             }
 
             //! check which atomic states are actually present in each superCell
@@ -270,10 +268,9 @@ namespace picongpu::simulation::stage
             //! fill each superCell's rate cache
             void fillRateCache(picongpu::MappingDesc const& mappingDesc) const
             {
-                using ForEachIonSpeciesFillLocalRateCache = pmacc::meta::ForEach<
-                    AtomicPhysicsIonSpecies,
-                    particles::atomicPhysics::stage::FillLocalRateCache<boost::mpl::_1>>;
-                ForEachIonSpeciesFillLocalRateCache{}(mappingDesc);
+                using ForEachIonSpeciesFillRateCache = pmacc::meta::
+                    ForEach<AtomicPhysicsIonSpecies, particles::atomicPhysics::stage::FillRateCache<boost::mpl::_1>>;
+                ForEachIonSpeciesFillRateCache{}(mappingDesc);
 
                 using ForEachIonSpeciesDumpRateCacheToConsole = pmacc::meta::ForEach<
                     AtomicPhysicsIonSpecies,
@@ -397,9 +394,9 @@ namespace picongpu::simulation::stage
             {
                 pmacc::DataConnector& dc = pmacc::Environment<>::get().DataConnector();
 
-                auto& localFoundUnboundIonField = *dc.get<S_FoundUnboundField>("LocalFoundUnboundIonField");
+                auto& foundUnboundIonField = *dc.get<S_FoundUnboundField>("FoundUnboundIonField");
                 DataSpace<picongpu::simDim> const fieldGridLayoutFoundUnbound
-                    = localFoundUnboundIonField.getGridLayout().sizeWithoutGuardND();
+                    = foundUnboundIonField.getGridLayout().sizeWithoutGuardND();
 
                 // pressure ionization loop, ends when no ion in unbound state anymore
                 bool foundUnbound = true;
@@ -415,7 +412,7 @@ namespace picongpu::simulation::stage
                         currentStep);
 
                     auto linearizedFoundUnboundIonBox = S_LinearizedBox<S_FoundUnboundField>(
-                        localFoundUnboundIonField.getDeviceDataBox(),
+                        foundUnboundIonField.getDeviceDataBox(),
                         fieldGridLayoutFoundUnbound);
 
                     foundUnbound = static_cast<bool>(deviceReduce(
@@ -437,7 +434,7 @@ namespace picongpu::simulation::stage
             bool isSubSteppingFinished(picongpu::MappingDesc const& mappingDesc, T_DeviceReduce& deviceReduce) const
             {
                 pmacc::DataConnector& dc = pmacc::Environment<>::get().DataConnector();
-                auto& localTimeRemainingField = *dc.get<S_TimeRemainingField>("LocalTimeRemainingField");
+                auto& localTimeRemainingField = *dc.get<S_TimeRemainingField>("TimeRemainingField");
                 DataSpace<picongpu::simDim> const fieldGridLayoutTimeRemaining
                     = localTimeRemainingField.getGridLayout().sizeWithoutGuardND();
 
@@ -461,7 +458,7 @@ namespace picongpu::simulation::stage
                 pmacc::DataConnector& dc = pmacc::Environment<>::get().DataConnector();
 
                 auto& perSuperCellElectronHistogramOverSubscribedField
-                    = *dc.get<S_OverSubscribedField>("LocalElectronHistogramOverSubscribedField");
+                    = *dc.get<S_OverSubscribedField>("ElectronHistogramOverSubscribedField");
 
                 /// @todo find better way than hard code old value, Brian Marre, 2023
                 // `static` avoids that reduce is allocating each time step memory, which will reduce the performance.
