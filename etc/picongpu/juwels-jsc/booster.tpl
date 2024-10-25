@@ -29,6 +29,7 @@
 #SBATCH --nodes=!TBG_nodes
 #SBATCH --ntasks=!TBG_tasks
 #SBATCH --ntasks-per-node=!TBG_devicesPerNode
+#SBATCH --cpus-per-task=!TBG_coresPerTask
 #SBATCH --mincpus=!TBG_mpiTasksPerNode
 #SBATCH --mem=!TBG_memPerNode
 #SBATCH --gres=gpu:!TBG_devicesPerNode
@@ -58,6 +59,10 @@ export UCX_RC_TIMEOUT=3000000.00us # 3s instead of 1s
 
 # required GPUs per node for the current job
 .TBG_devicesPerNode=$(if [ $TBG_tasks -gt $TBG_numHostedDevicesPerNode ] ; then echo $TBG_numHostedDevicesPerNode; else echo $TBG_tasks; fi)
+
+# Cores per task. Theoretically we have 48 cores, we might leave one per task for the OS but then we would need to
+# hope that srun will do the pinning of cores to memory correctly in order to performantly read from memory.
+.TBG_coresPerTask=12
 
 # host memory per device
 .TBG_memPerDevice="$((499712 / $TBG_numHostedDevicesPerNode))"
